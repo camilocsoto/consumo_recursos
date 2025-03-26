@@ -1,0 +1,69 @@
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+# ================================
+# 2. consumo mensual promedio de luz, gas y agua
+# ================================
+
+data_f$`FECHA TERMINO` <- as.Date(data_f$`FECHA TERMINO`, format = "%d/%m/%Y")
+
+# Filtrar los principales recursos
+recursos_principales <- c("GAS", "AGUA", "Energía Eléctrica")
+datos_principales <- data_f %>%
+  filter(CONCEPTO %in% recursos_principales)
+
+# (Opcional) Convertir CONSUMO a numérico si no lo has hecho antes
+datos_principales$CONSUMO <- as.numeric(gsub(",", ".", datos_principales$CONSUMO))
+
+# Extraer el mes de FECHA TERMINO
+# 'label = TRUE' crea etiquetas de mes (ej: "Ene", "Feb", etc.)
+datos_principales$MES <- month(datos_principales$`FECHA TERMINO`, label = TRUE, abbr = TRUE)
+
+# Agrupar por CONCEPTO y MES, y calcular el promedio de CONSUMO
+datos_mensuales <- datos_principales %>%
+  group_by(CONCEPTO, MES) %>%
+  summarise(promedio_consumo = mean(CONSUMO, na.rm = TRUE)) %>%
+  ungroup()
+
+# Crear el gráfico de barras
+ggplot(datos_mensuales, aes(x = MES, y = promedio_consumo)) +
+  geom_col(fill = "steelblue") +
+  facet_wrap(~ CONCEPTO, ncol = 1, scales = "free_x") +  # <-- Cambiar ncol a 1
+  labs(title = "Consumo Mensual Promedio por Recurso",
+       x = "Mes",
+       y = "Consumo Promedio") +
+  theme_minimal() +
+  theme(strip.text = element_text(face = "bold", size = 12))
+
+
+# ================================
+# 3. consumo mensual promedio de luz por C33
+# ================================
+
+data_f$`FECHA TERMINO` <- as.Date(data_f$`FECHA TERMINO`, format = "%d/%m/%Y")
+
+# Convertir la columna CONSUMO a numérico (si no lo has hecho antes)
+data_f$CONSUMO <- as.numeric(gsub(",", ".", data_f$CONSUMO))
+
+# Filtrar por concepto "Energía Eléctrica" y KEY Equipment = "C33"
+datos_principales <- data_f %>%
+  filter(CONCEPTO == "Energía Eléctrica", `KEY Equipment` == "C33")
+
+# Extraer el mes de FECHA TERMINO (usa etiqueta abreviada de mes)
+datos_principales$MES <- month(datos_principales$`FECHA TERMINO`, label = TRUE, abbr = TRUE)
+
+# Agrupar por MES y calcular el promedio de CONSUMO
+datos_mensuales <- datos_principales %>%
+  group_by(MES) %>%
+  summarise(promedio_consumo = mean(CONSUMO, na.rm = TRUE)) %>%
+  ungroup()
+
+# Crear el gráfico de barras
+ggplot(datos_mensuales, aes(x = MES, y = promedio_consumo)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Historial Mensual de Consumo de Energía Eléctrica (Equipo C33)",
+       x = "Mes",
+       y = "Consumo Promedio (kWh)") +
+  theme_minimal()
+

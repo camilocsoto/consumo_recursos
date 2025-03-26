@@ -1,0 +1,20 @@
+Para poder generar el documento en R es necesario instalar lo siguiente:
+
+install.packages("rmarkdown")
+install.packages("tinytex")
+install.packages("knitr")
+install.packages("devtools")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("lubridate")
+
+
+
+En la consola de R se deben instalar los siguientes paquetes:
+library(rmarkdown)
+library(tinytex)
+
+El documento se genera al ejecutar Knit y se selecciona la opción de PDF para generar el documento, la carpeta images contienen
+las imágenes de las figuras utilizadas
+

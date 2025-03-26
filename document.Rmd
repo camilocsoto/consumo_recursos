@@ -1,0 +1,329 @@
+---
+title: "análisis exploratorio de datos EDA"
+author: "Juan Camilo Suárez Soto"
+date: "2025-03-24"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# I. Análisis descriptivo del consumo de recursos.  
+
+En este ejercicio se aboradará la importación y limpieza de datos, asegurando su calidad antes del análisis. Posteriormente, aplicaremos medidas estadísticas como la media, mediana, moda y coeficiente de variación para evaluar la dispersión y consistencia de los consumos registrados. Estos indicadores permitirán detectar posibles anomalías y tendencias significativas en el uso de recursos.  
+
+## Importación de datos  
+
+Se utilizó la función `read.csv` de R para importar los datos y almacenarlos en la variable `data_factory.`:  
+```{r, echo=TRUE}
+data_f <- read.csv("./dataset/data_f.csv", stringsAsFactors = FALSE, check.names = FALSE, row.names = NULL, sep = ";")
+```
+
+Antes de realizar el análisis de datos, se aplicó una técnica sencilla de limpieza en tres variables clave que podrían afectar los resultados estadísticos. Se eliminaron las filas con valores vacíos en "Fecha", "Consumo" y "Concepto", por ser las más sensibles a la falta de datos. Finalmente, se ajustó el formato numérico en "Consumo", "ID" e "ID Unico", reemplazando las comas (,) por puntos (.) en la parte decimal.  
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+
+# Elimina filas donde FECHA INICIO es NA
+data_f <- data_f %>%
+  filter(!(is.na(`FECHA INICIO`) | `FECHA INICIO` == ""))
+
+# Elimina filas donde CONSUMO es NA
+data_f <- data_f %>% 
+  filter(!is.na(CONSUMO) & CONSUMO != "")
+
+# Elimina filas donde CONCEPTO es NA
+data_f <- data_f %>% 
+  filter(!is.na(CONCEPTO) & CONCEPTO != "")
+
+# Modifica la (,) por (.) en 3 variables
+data_f <- data_f %>%
+  mutate(
+    CONSUMO = as.numeric(gsub(",", ".", CONSUMO)),
+    ID = as.character(ID),
+    `ID Unico` = as.character(`ID Unico`)
+  )
+
+# Informe:
+data_original <- read.csv("./dataset/data_f.csv", stringsAsFactors = FALSE, check.names = FALSE, row.names = NULL, sep = ";")
+diferencia_filas <-nrow(data_original) - nrow(data_f)
+cat("cantidad de filas eliminadas: ", diferencia_filas)
+cat("cantidad de datos ajustados: ", nrow(data_f)*3)
+
+rm(data_original)
+```
+
+## Principales medidas de tendencia para cada tipo de recurso:  
+
+En el siguiente apartado se presentan las medidas de consumo para cada concepto, como los servicios de agua, luz, entre otros.  
+
+#### tipos de dato:  
+En primer lugar, observamos que hay conceptos que tienen más de una unidad de medición, lo que indica que la variable debe ser normalizada a una única unidad.  
+```{r, echo=FALSE}
+library(knitr)
+concepto <- c("A. COMPRIMIDO", "AGUA", "CDD", "Delta P", "Energía Eléctrica", "Energía Refrigeración", "GAS", "HDD", "Running Time", "VACIO", "VAPOR")
+
+unidades<- c("[m3]", "[m3]", "[°C]", "[inHg] [mBAR]", "[kWh]", "[TNh]", "[m3]", "[°C]", "[hrs]", "[m3]", "[kg] [Tn]")
+
+tabla_variables <- data.frame(concepto, unidades)
+
+# Mostrar la tabla con knitr
+kable(tabla_variables, caption = "Tabla de unidades de cada concepto")
+```
+
+Para analizar el comportamiento de los datos, se clasificaron las variables según su tipo. Las fechas son continuas, ya que siguen un orden. En contraste, "concepto", "línea", "equipo clave", "unidad" e "ID fabricación" son nominales, pues representan categorías sin jerarquía. Por último, "consumo" e "ID único" son numéricos pero no siguen un orden específico:  
+```{r, echo=FALSE}
+library(knitr)
+# Definir los vectores con los datos
+variables <- c("FECHA INICIO", "FECHA TERMINO", "CONCEPTO", "LINE", 
+               "KEY Equipment", "UNIDAD", "CONSUMO", "ID", "ID Unico", 
+               "ID FABRICACION")
+
+tipos <- c("continua", "continua", "nominal", "nominal", "nominal", "nominal", 
+           "Continua", "Discreta", "Discreta", "nominal")
+
+# Crear el data frame
+tabla_variables <- data.frame(variables, tipos)
+
+# Mostrar la tabla con knitr
+kable(tabla_variables, caption = "Tabla de variables y tipos de datos")
+```
+
+### unidades de medida:  
+
+#### media:  
+La media de aire comprimido y vacío destaca por su magnitud, sugiriendo un uso intensivo, posibles fugas o incluso errores de medición, mientras que agua y energía eléctrica, aunque menores, siguen siendo relevantes para los costos y la eficiencia de los procesos. El Delta P negativo indica una diferencia de presión particular, y los demás conceptos, con consumos más moderados.
+```{r, echo=TRUE}
+library(knitr)
+media_data  <- aggregate(CONSUMO ~ CONCEPTO, data = data_f, FUN = mean)
+kable(media_data, caption = "Media de consumo por Concepto", digits = 2)
+```
+#### mediana:
+La mediana del consumo de aire comprimido y vacío es inflada por valores atípicos, mientras que la mediana refleja mejor el consumo típico. En los demás conceptos, la diferencia es menor, indicando una distribución más equilibrada y hace que la mediana sea más confiable que la media.
+```{r, echo=TRUE}
+library(knitr)
+mediana_data <- aggregate(CONSUMO ~ CONCEPTO, data = data_f, FUN = median)
+kable(mediana_data, caption = "Mediana de consumo por Concepto", digits = 2)
+```
+#### moda:
+En el dataset, los conceptos como aire comprimido, agua, CDD, energía eléctrica, gas y vapor tienen 0.00 como el valor más frecuente, mientras que en los demás conceptos predominan otros valores.
+```{r, echo=TRUE}
+library(knitr)
+# Función para calcular la moda
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+moda_data <- aggregate(CONSUMO ~ CONCEPTO, data = data_f, FUN = getmode)
+kable(moda_data, caption = "moda de consumo por Concepto", digits = 2)
+```
+#### varianza muestral:
+En el consumo por concepto, destaca la alta variabilidad en vacío y aire comprimido, lo que sugiere valores atípicos. En contraste, AGUA, CDD, HDD, Running Time y VAPOR presentan dispersión aceptable.
+```{r, echo=TRUE}
+library(knitr)
+sd_data  <- aggregate(CONSUMO ~ CONCEPTO, data = data_f, FUN = sd)
+kable(sd_data, caption = "Desv. estándar de consumo por Concepto", digits = 2)
+```
+
+#### coeficiente de variación:  
+En el consumo por concepto, destaca la alta variabilidad en vacío y aire comprimido, lo que sugiere valores atípicos. En contraste, AGUA, CDD, HDD, Running Time y VAPOR presentan menor dispersión. La desviación negativa de Delta P tiene una notoria y negativa desviación, algo muy particular en esta variable
+```{r, echo=TRUE}
+library(knitr)
+cv_data <- aggregate(CONSUMO ~ CONCEPTO, data = data_f, FUN = function(x) sd(x) / mean(x))
+kable(sd_data, caption = "Coeficiente de variación de consumo por Concepto", digits = 2)
+```
+
+## Resumen estadístico  
+Tras calcular la media y la mediana se puede concluir que, la media muestral del consumo promedio está  sesgada por valores atípicos, mientras que la mediana refleja el consumo típico sin ser afectada por extremos, lo que la hace más fiable en este caso; y la gran diferencia entre ambas indica la presencia de outliers, como en el caso del aire comprimido y el vacío. Además, el coeficiente de variación confirma la hipótesis de la poca consistencia en el consumo de cada concepto.
+```{r, echo=FALSE}
+library(dplyr)
+library(knitr)
+
+tabla_resumen <- merge(mediana_data, media_data, by = "CONCEPTO", suffixes = c(".mediana", ".media")) %>%
+  merge(moda_data, by = "CONCEPTO") %>%
+  merge(sd_data, by = "CONCEPTO", suffixes = c("", ".sd")) %>%
+  merge(cv_data, by = "CONCEPTO", suffixes = c("", ".cv")) %>%
+  rename(Mediana = CONSUMO.mediana, Media = CONSUMO.media, Moda = CONSUMO, SD = CONSUMO.sd, CV = CONSUMO.cv)
+
+kable(tabla_resumen, caption = "Resumen estadístico de consumo por concepto", digits = 2)
+```
+
+# II. Visualización y distribución de consumo
+En el siguiente apartado se presenta un histograma de densidad por tipo de consumo. En el eje y se muestra la cantidad de registros correspondientes a cada nivel de consumo específico.  
+
+El código filtra los datos para seleccionar los principales recursos ("GAS", "AGUA" y "Energía Eléctrica") y crea un histograma con densidad para cada uno. Se utiliza ggplot para trazar la distribución de consumo con 50 bins, se aplican colores personalizados y se añade una línea vertical que indica la mediana. Además, los gráficos se organizan en una sola columna para facilitar la comparación entre conceptos.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+
+# Filtrar los principales recursos
+recursos_principales <- c("GAS", "AGUA", "Energía Eléctrica")
+datos_principales <- data_f %>% filter(CONCEPTO %in% recursos_principales)
+
+# Crear el histograma con densidad en formato vertical
+ggplot(datos_principales, aes(x = CONSUMO, fill = CONCEPTO)) +
+  geom_histogram(aes(y = ..density..), bins = 50, color = "black", alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.3) +
+  # Cambiamos ncol = 1 para tener una sola columna (gráficos en fila)
+  facet_wrap(~CONCEPTO, scales = "free", ncol = 1) +
+  scale_fill_manual(values = c("blue", "green", "red")) +
+  geom_vline(aes(xintercept = median(CONSUMO, na.rm = TRUE)), 
+             color = "blue", linetype = "dashed", size = 1) +
+  labs(title = "Histograma con Densidad por Tipo de Consumo",
+       x = "Consumo",
+       y = "Densidad",
+       fill = "CONCEPTO") +
+  theme_minimal() +
+  theme(strip.text = element_text(face = "bold", size = 12))
+```
+El histograma con densidad por tipo de consumo muestra una fuerte concentración de datos hacia valores bajos, lo que sugiere un sesgo hacia la izquierda. Algunos valores más altos pueden considerarse atípicos, indicando consumos inusuales que conviene analizar con detalle. Estas observaciones son clave al decidir si el modelo estadístico debe asumir una distribución paramétrica o no, y resaltan la importancia de anotar y monitorear posibles outliers para comprender mejor la variabilidad de cada recurso.
+
+
+# III. Análisis de patrones temporales de consumo  
+
+En el siguiente apartado se presenta el historial de consumo mensual promedio del agua, gas y luz.  
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+
+data_f$`FECHA TERMINO` <- as.Date(data_f$`FECHA TERMINO`, format = "%d/%m/%Y")
+
+# Filtrar los principales recursos
+recursos_principales <- c("GAS", "AGUA", "Energía Eléctrica")
+datos_principales <- data_f %>%
+  filter(CONCEPTO %in% recursos_principales)
+
+# (Opcional) Convertir CONSUMO a numérico si no lo has hecho antes
+datos_principales$CONSUMO <- as.numeric(gsub(",", ".", datos_principales$CONSUMO))
+
+# Extraer el mes de FECHA TERMINO
+# 'label = TRUE' crea etiquetas de mes (ej: "Ene", "Feb", etc.)
+datos_principales$MES <- month(datos_principales$`FECHA TERMINO`, label = TRUE, abbr = TRUE)
+
+# Agrupar por CONCEPTO y MES, y calcular el promedio de CONSUMO
+datos_mensuales <- datos_principales %>%
+  group_by(CONCEPTO, MES) %>%
+  summarise(promedio_consumo = mean(CONSUMO, na.rm = TRUE)) %>%
+  ungroup()
+
+# Crear el gráfico de barras
+ggplot(datos_mensuales, aes(x = MES, y = promedio_consumo)) +
+  geom_col(fill = "steelblue") +
+  facet_wrap(~ CONCEPTO, ncol = 1, scales = "free_x") +  # <-- Cambiar ncol a 1
+  labs(title = "Consumo Mensual Promedio por Recurso",
+       x = "Mes",
+       y = "Consumo Promedio") +
+  theme_minimal() +
+  theme(strip.text = element_text(face = "bold", size = 12))
+
+```
+De este modo podemos darnos cuenta que el concepto menos consumido es el agua, seguido del gas y la energía.  
+
+Ahora podrá observar el consumo eléctrico mensual de la máquina C33, la cual presenta un alto consumo energético en promedio.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+data_f$`FECHA TERMINO` <- as.Date(data_f$`FECHA TERMINO`, format = "%d/%m/%Y")
+
+# Convertir la columna CONSUMO a numérico (si no lo has hecho antes)
+data_f$CONSUMO <- as.numeric(gsub(",", ".", data_f$CONSUMO))
+
+# Filtrar por concepto "Energía Eléctrica" y KEY Equipment = "C33"
+datos_principales <- data_f %>%
+  filter(CONCEPTO == "Energía Eléctrica", `KEY Equipment` == "C33")
+
+# Extraer el mes de FECHA TERMINO (usa etiqueta abreviada de mes)
+datos_principales$MES <- month(datos_principales$`FECHA TERMINO`, label = TRUE, abbr = TRUE)
+
+# Agrupar por MES y calcular el promedio de CONSUMO
+datos_mensuales <- datos_principales %>%
+  group_by(MES) %>%
+  summarise(promedio_consumo = mean(CONSUMO, na.rm = TRUE)) %>%
+  ungroup()
+
+# Crear el gráfico de barras
+ggplot(datos_mensuales, aes(x = MES, y = promedio_consumo)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Historial Mensual de Consumo de Energía Eléctrica (Equipo C33)",
+       x = "Mes",
+       y = "Consumo Promedio (kWh)") +
+  theme_minimal()
+```
+
+El segundo gráfico muestra el consumo mensual de energía eléctrica del equipo C33, mientras que el primer gráfico presenta el consumo promedio mensual de tres recursos: agua, electricidad y gas.  
+
+Observando ambos gráficos, se puede notar que el consumo eléctrico del equipo C33 sigue un patrón similar al del consumo total de energía eléctrica en el primer gráfico. Esto sugiere que el equipo C33 podría tener una contribución significativa al consumo general de electricidad. Sin embargo, dado que el primer gráfico representa un promedio de todos los equipos y consumos, no se puede afirmar con certeza que el equipo C33 sea el principal responsable sin un análisis más detallado.  
+
+En cuanto a la relación con los otros recursos (agua y gas), no se observa una correlación directa con el comportamiento del consumo del equipo C33, ya que su gráfico solo muestra el consumo de electricidad. Para determinar si su funcionamiento influye en el consumo de agua o gas, sería necesario contar con datos más detallados sobre los procesos en los que se involucra.
+
+# IV. Análisis de correlaciones entre consumos  
+
+## Preparación de datos:   
+A continuación se hará una correlación entre el consumo de energía eléctrica y gas, agrupando primero el tipo de equipo y la fecha de terminación:  
+
+Un coeficiente de correlación de 0.86 indica una relación fuerte y positiva entre dos variables, lo que significa que cuando una aumenta, la otra tiende a hacerlo también, y cuando una disminuye, la otra sigue el mismo patrón. Este valor, cercano a 1, sugiere que los datos se alinean bastante con una tendencia lineal ascendente, lo que permite una buena capacidad de predicción entre ambas variables. Sin embargo, es importante recordar que una correlación alta no implica causalidad; la relación observada puede deberse a otros factores o simplemente a una coincidencia.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+
+# 2) Convertir FECHA TERMINO a tipo Date, ajustando el formato de día/mes/año si es necesario
+data_f$`FECHA TERMINO` <- as.Date(data_f$`FECHA TERMINO`, format = "%d/%m/%Y")
+
+# 3) Convertir CONSUMO a numérico (si en el CSV viene con coma como separador decimal)
+data_f$CONSUMO <- as.numeric(gsub(",", ".", data_f$CONSUMO))
+
+# 4) Agrupar y resumir el consumo de GAS por FECHA TERMINO y KEY Equipment
+gas_data <- data_f %>%
+  filter(CONCEPTO == "GAS") %>%
+  group_by(`FECHA TERMINO`, `KEY Equipment`) %>%
+  summarise(consumo_gas = sum(CONSUMO, na.rm = TRUE)) %>%
+  ungroup()
+
+# 5) Agrupar y resumir el consumo de Energía Eléctrica por FECHA TERMINO y KEY Equipment
+elec_data <- data_f %>%
+  filter(CONCEPTO == "Energía Eléctrica") %>%
+  group_by(`FECHA TERMINO`, `KEY Equipment`) %>%
+  summarise(consumo_elec = sum(CONSUMO, na.rm = TRUE)) %>%
+  ungroup()
+
+# 6) Combinar ambos data frames por FECHA TERMINO y KEY Equipment
+combined_data <- left_join(gas_data, elec_data, by = c("FECHA TERMINO", "KEY Equipment"))
+
+# 7) Calcular la correlación (opcional, pero útil)
+corr_value <- cor(combined_data$consumo_gas, combined_data$consumo_elec, use = "complete.obs")
+corr_value
+# Imprime el valor de correlación en la consola
+
+# 8) Crear el diagrama de dispersión con la línea de regresión
+ggplot(combined_data, aes(x = consumo_gas, y = consumo_elec)) +
+  geom_point(color = "brown", alpha = 0.7) +  # Puntos
+  geom_smooth(method = "lm", color = "blue", fill = "lightblue") +  # Línea de regresión con banda de confianza
+  labs(title = "Correlación entre Consumo de Gas y Energía Eléctrica",
+       subtitle = paste("Coeficiente de correlación =", round(corr_value, 2)),
+       x = "Consumo de Gas (m³)",
+       y = "Consumo Eléctrico (kWh)") +
+  theme_minimal()
+```
+
+Los valores atípicos en torno a 0 en consumo eléctrico, pero con alto consumo de gas, podrían indicar procesos donde el gas es la fuente principal de energía sin necesidad de apoyo eléctrico, como en sistemas de calefacción o producción térmica independiente. Por otro lado, el grupo de valores en el límite superior sugiere puntos donde ambos consumos son extremadamente altos, posiblemente reflejando industrias o equipos que utilizan simultáneamente grandes cantidades de gas y electricidad, como plantas de cogeneración o sistemas con alta demanda energética. Estos patrones podrían señalar ineficiencias o comportamientos específicos de consumo que merecen un análisis más detallado.
+
+
+# V. Análisis de distribución de consumo y dimensionamiento de recursos.  
+
+Lo siento mucho, Ignacio. No logré completar este punto y te he fallado. Aun así, quiero que sepas cuánto apreciamos todo lo que nos has enseñado. ¡Gracias de corazón! :3
+
