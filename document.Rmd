@@ -325,5 +325,103 @@ Los valores atípicos en torno a 0 en consumo eléctrico, pero con alto consumo 
 
 # V. Análisis de distribución de consumo y dimensionamiento de recursos.  
 
-Lo siento mucho, Ignacio. No logré completar este punto y te he fallado. Aun así, quiero que sepas cuánto apreciamos todo lo que nos has enseñado. ¡Gracias de corazón! :3
 
+#### Dustrubución del consumo de agua: 
+Al analizar nuevamente el histograma del consumo mensual de agua, observamos que la distribución es asimétrica. En el primer semestre (enero - junio), el consumo promedio se sitúa ligeramente por encima de los 50 m³. Sin embargo, en el segundo semestre (julio - diciembre), el consumo aumenta significativamente, alcanzando 300 m³ en julio. Este pico de consumo provoca un sesgo en la distribución, lo que confirma que no es simétrica.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+# Convertir FECHA TERMINO a tipo Date
+data_f$`FECHA TERMINO` <- as.Date(data_f$`FECHA TERMINO`, format = "%d/%m/%Y")
+
+# Convertir CONSUMO a numérico si no lo has hecho antes
+data_f$CONSUMO <- as.numeric(gsub(",", ".", data_f$CONSUMO))
+
+# Extraer el mes de FECHA TERMINO
+data_f$MES <- month(data_f$`FECHA TERMINO`, label = TRUE, abbr = TRUE)
+
+# Filtrar solo AGUA y calcular el promedio mensual de consumo
+datos_agua <- data_f %>%
+  filter(CONCEPTO == "AGUA") %>%
+  group_by(MES) %>%
+  summarise(promedio_consumo = mean(CONSUMO, na.rm = TRUE)) %>%
+  ungroup()
+
+# Crear el gráfico de barras solo para AGUA
+ggplot(datos_agua, aes(x = MES, y = promedio_consumo)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Consumo Mensual Promedio de Agua",
+       x = "Mes",
+       y = "Consumo Promedio (m³)") +
+  theme_minimal()
+```
+Por otro lado, se generó un diagrama **boxplot** con escala logarítmica, ya que en una escala lineal no se visualiza correctamente debido a la gran variabilidad de los datos. Para interpretar mejor este gráfico, según la Tabla 8, la media del consumo de agua es de 55,47 m³, mientras que la mediana es de 3,50 m³. En comparación con el histograma anterior, podemos concluir que los valores atípicos más altos corresponden al mes de julio.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(lubridate)  # Para usar la función month()
+library(ggplot2)
+
+# Asegúrate de que FECHA TERMINO sea un Date válido
+data_f$`FECHA TERMINO` <- as.Date(data_f$`FECHA TERMINO`, format = "%d/%m/%Y")
+
+# Filtrar solo los registros donde el CONCEPTO es "AGUA"
+agua_data <- data_f %>%
+  filter(CONCEPTO == "AGUA")
+
+# Crear la columna MES a partir de FECHA TERMINO
+# 'label = TRUE' devuelve nombres de meses abreviados (Ej: Ene, Feb, ...)
+agua_data$MES <- month(agua_data$`FECHA TERMINO`, label = TRUE, abbr = TRUE)
+
+# Crear el boxplot agrupado por MES
+ggplot(agua_data, aes(x = MES, y = CONSUMO)) +
+  geom_boxplot(fill = "lightblue", color = "darkblue", 
+               outlier.shape = 19, outlier.size = 2, outlier.alpha = 0.6) +
+  scale_y_log10() +  # Si quieres ver mejor la distribución en caso de valores muy grandes
+  labs(
+    title = "Distribución Mensual del Consumo de Agua (Escala Logarítmica)",
+    x = "Mes",
+    y = "Consumo (log)"
+  ) +
+  theme_minimal()
+```
+
+
+#### determinación de datos normales: 
+
+El script calcula un rango "normal" de consumo asumiendo que, en una distribución normal, aproximadamente el 68% de los datos se ubican dentro de la media ± una desviación estándar. En este caso, se utiliza la media (55.47) y la desviación estándar (1047.48) para establecer los límites. Dado que el consumo no puede ser negativo, se ajusta el límite inferior a 0 si el cálculo arroja un valor negativo. Aunque la gran diferencia entre la media y la mediana (3.50) sugiere que la distribución está fuertemente sesgada por valores extremos, este método proporciona un punto de partida objetivo para identificar el rango de consumo "normal".
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Calcular los cuartiles
+# Valores resumen obtenidos:
+media <- 55.47
+mediana <- 3.50
+sd_val <- 1047.48
+
+# Establecer límites usando la regla de la desviación estándar (mean ± 1 SD)
+# Dado que el consumo no puede ser negativo, se establece el límite inferior en 0 si corresponde.
+limite_inferior <- max(0, media - sd_val)
+limite_superior <- media + sd_val
+
+cat("Rango normal de consumo (mean ± 1 SD): [", limite_inferior, ",", limite_superior, "]\n")
+```
+
+También se hizo otro script que determina el porcentaje de valores que están sobre y bajo 1000 m^3, y nos damos cuenta que 99% de los datos están bajo 1000 y muy pocos sobre 1000%. Por lo que, tampoco puede ser consdierado 1000 como un valor de referencia sino otro que esté en el rango normal anterior.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+library(dplyr)
+
+porcentajes_agua <- data_f %>% 
+  filter(CONCEPTO == "AGUA") %>%
+  summarise(
+    total = n(),
+    debajo_1000 = sum(CONSUMO < 1000, na.rm = TRUE),
+    porcentaje_debajo = 100 * debajo_1000 / total,
+    encima_1000 = sum(CONSUMO >= 1000, na.rm = TRUE),
+    porcentaje_encima = 100 * encima_1000 / total
+  )
+
+print(porcentajes_agua)
+```
